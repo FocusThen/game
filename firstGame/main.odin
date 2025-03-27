@@ -112,7 +112,7 @@ main :: proc() {
 
 	level: Level
 
-	if level_data, ok := os.read_entire_file("level.json",  context.temp_allocator); ok {
+	if level_data, ok := os.read_entire_file("level.json", context.temp_allocator); ok {
 		if json.unmarshal(level_data, &level) != nil {
 			append(&level.platforms, rl.Vector2{-20, 20})
 		}
@@ -211,8 +211,9 @@ main :: proc() {
 		}
 
 		rl.EndMode2D()
-
 		rl.EndDrawing()
+
+		free_all(context.temp_allocator)
 	}
 
 	rl.CloseWindow()
