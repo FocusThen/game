@@ -1,5 +1,11 @@
+#+feature dynamic-literals
+
 package main
 
+import "core:encoding/json"
+import "core:fmt"
+import "core:mem"
+import "core:os"
 import rl "vendor:raylib"
 
 Animation_Name :: enum {
@@ -55,7 +61,30 @@ draw_animation :: proc(anim: Animation, pos: rl.Vector2, flip: bool) {
 
 PixelWindowHeight :: 180
 
+Level :: struct {
+	platforms: [dynamic]rl.Vector2,
+}
+
+platform_collider :: proc(pos: rl.Vector2) -> rl.Rectangle {
+	return {pos.x, pos.y, 96, 16}
+}
+
 main :: proc() {
+	track: mem.Tracking_Allocator
+	mem.tracking_allocator_init(&track, context.allocator)
+	context.allocator = mem.tracking_allocator(&track)
+
+	defer {
+		for _, entry in track.allocation_map {
+			fmt.eprintf("%v leaked %v bytes\n", entry.location, entry.size)
+		}
+
+		for entry in track.bad_free_array {
+			fmt.eprintf("%v bad free\n", entry.location)
+		}
+		mem.tracking_allocator_destroy(&track)
+	}
+
 	rl.InitWindow(1280, 720, "My First Game")
 	//rl.SetWindowState({.WINDOW_RESIZABLE})
 	rl.SetTargetFPS(500)
@@ -81,9 +110,20 @@ main :: proc() {
 
 	current_anim := player_idle
 
-	platforms := []rl.Rectangle{{-20, 20, 96, 16}, {-30, -20, 96, 16}}
+	level: Level
+
+	if level_data, ok := os.read_entire_file("level.json",  context.temp_allocator); ok {
+		if json.unmarshal(level_data, &level) != nil {
+			append(&level.platforms, rl.Vector2{-20, 20})
+		}
+	} else {
+		append(&level.platforms, rl.Vector2{-20, 20})
+	}
+
 
 	platform_texture := rl.LoadTexture("platform.png")
+
+	editing := false
 
 
 	for !rl.WindowShouldClose() {
@@ -121,8 +161,9 @@ main :: proc() {
 
 		player_grounded = false
 
-		for platform in platforms {
-			if rl.CheckCollisionRecs(player_feet_collider, platform) && player_vel.y > 0 {
+		for platform in level.platforms {
+			if rl.CheckCollisionRecs(player_feet_collider, platform_collider(platform)) &&
+			   player_vel.y > 0 {
 				player_vel.y = 0
 				player_pos.y = platform.y
 				player_grounded = true
@@ -142,15 +183,44 @@ main :: proc() {
 
 		rl.BeginMode2D(camera)
 		draw_animation(current_anim, player_pos, player_flip)
-		for platform in platforms {
-			rl.DrawTextureV(platform_texture, {platform.x, platform.y}, rl.WHITE)
+		for platform in level.platforms {
+			rl.DrawTextureV(platform_texture, platform, rl.WHITE)
 		}
-    // Debug
+		// Debug
 		//rl.DrawRectangleRec(player_feet_collider, {0, 255, 0, 100})
+		if rl.IsKeyPressed(.F2) {
+			editing = !editing
+		}
+
+		if editing {
+			mp := rl.GetScreenToWorld2D(rl.GetMousePosition(), camera)
+
+			rl.DrawTextureV(platform_texture, mp, rl.WHITE)
+
+			if rl.IsMouseButtonPressed(.LEFT) {
+				append(&level.platforms, mp)
+			}
+			if rl.IsMouseButtonPressed(.RIGHT) {
+				for p, idx in level.platforms {
+					if rl.CheckCollisionPointRec(mp, platform_collider(p)) {
+						unordered_remove(&level.platforms, idx)
+						break
+					}
+				}
+			}
+		}
+
 		rl.EndMode2D()
 
 		rl.EndDrawing()
 	}
 
 	rl.CloseWindow()
+
+	if level_data, err := json.marshal(level, allocator = context.temp_allocator); err == nil {
+		os.write_entire_file("level.json", level_data)
+	}
+
+	free_all(context.temp_allocator)
+	delete(level.platforms)
 }
