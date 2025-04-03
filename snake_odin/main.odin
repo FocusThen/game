@@ -68,6 +68,11 @@ main :: proc() {
 
 	restart()
 
+	food_sprite := rl.LoadTexture("food.png")
+	head_sprite := rl.LoadTexture("head.png")
+	body_sprite := rl.LoadTexture("body.png")
+	tail_sprite := rl.LoadTexture("tail.png")
+
 	for !rl.WindowShouldClose() {
 		if rl.IsKeyPressed(.W) {
 			move_direction = {0, -1}
@@ -105,16 +110,16 @@ main :: proc() {
 
 			for i in 1 ..< snake_length {
 				cur_pos := snake[i]
-        // check eating your self
-        if(cur_pos == head_pos){
-          game_over = true
-        }
+				// check eating your self
+				if (cur_pos == head_pos) {
+					game_over = true
+				}
 
 				snake[i] = next_part_pos
 				next_part_pos = cur_pos
 			}
 
-      // food
+			// food
 			if head_pos == food_pos {
 				snake_length += 1
 				snake[snake_length - 1] = next_part_pos
@@ -135,13 +140,17 @@ main :: proc() {
 		rl.BeginMode2D(camera)
 
 		// food
-		food_rect := rl.Rectangle {
-			f32(food_pos.x) * CELL_SIZE,
-			f32(food_pos.y) * CELL_SIZE,
-			CELL_SIZE,
-			CELL_SIZE,
-		}
-		rl.DrawRectangleRec(food_rect, rl.RED)
+		// RECT
+		//food_rect := rl.Rectangle {
+		//	f32(food_pos.x) * CELL_SIZE,
+		//	f32(food_pos.y) * CELL_SIZE,
+		//	CELL_SIZE,
+		//	CELL_SIZE,
+		//}
+		//rl.DrawRectangleRec(food_rect, rl.RED)
+
+		// Texture
+		rl.DrawTextureV(food_sprite, {f32(food_pos.x), f32(food_pos.y)} * CELL_SIZE, rl.WHITE)
 
 		for i in 0 ..< snake_length {
 			body_rect := rl.Rectangle {
