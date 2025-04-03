@@ -19,6 +19,35 @@ snake_length: int
 snake_head_position: Vec2i
 move_direction: Vec2i
 game_over: bool
+food_pos: Vec2i
+
+
+// food
+place_food :: proc() {
+	occupied: [GRID_WIDTH][GRID_WIDTH]bool
+
+	for i in 0 ..< snake_length {
+		occupied[snake[i].x][snake[i].y] = true
+	}
+
+	free_cells := make([dynamic]Vec2i, context.temp_allocator)
+
+	for x in 0 ..< GRID_WIDTH {
+		for y in 0 ..< GRID_WIDTH {
+			if !occupied[x][y] {
+				append(&free_cells, Vec2i{x, y})
+			}
+		}
+	}
+
+	if len(free_cells) > 0 {
+		random_cell_index := rl.GetRandomValue(0, i32(len(free_cells) - 1))
+		food_pos = free_cells[random_cell_index]
+	}
+
+	// other ways to control over memory
+	//delete(free_cells)
+}
 
 restart :: proc() {
 	start_head_pos := Vec2i{GRID_WIDTH / 2, GRID_WIDTH / 2}
@@ -28,7 +57,9 @@ restart :: proc() {
 	snake_length = 3
 	move_direction = {0, 1}
 	game_over = false
+	place_food()
 }
+
 
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
@@ -74,8 +105,20 @@ main :: proc() {
 
 			for i in 1 ..< snake_length {
 				cur_pos := snake[i]
+        // check eating your self
+        if(cur_pos == head_pos){
+          game_over = true
+        }
+
 				snake[i] = next_part_pos
 				next_part_pos = cur_pos
+			}
+
+      // food
+			if head_pos == food_pos {
+				snake_length += 1
+				snake[snake_length - 1] = next_part_pos
+				place_food()
 			}
 
 
@@ -91,6 +134,15 @@ main :: proc() {
 
 		rl.BeginMode2D(camera)
 
+		// food
+		food_rect := rl.Rectangle {
+			f32(food_pos.x) * CELL_SIZE,
+			f32(food_pos.y) * CELL_SIZE,
+			CELL_SIZE,
+			CELL_SIZE,
+		}
+		rl.DrawRectangleRec(food_rect, rl.RED)
+
 		for i in 0 ..< snake_length {
 			body_rect := rl.Rectangle {
 				f32(snake[i].x) * CELL_SIZE,
@@ -103,16 +155,18 @@ main :: proc() {
 		}
 
 
-    // game over
+		// game over
 
-    if game_over{
-      rl.DrawText("Game Over!", 4, 4, 25, rl.RED)
-      rl.DrawText("Press Enter to Play Again!", 4, 30, 15, rl.BLACK)
-    }
+		if game_over {
+			rl.DrawText("Game Over!", 4, 4, 25, rl.RED)
+			rl.DrawText("Press Enter to Play Again!", 4, 30, 15, rl.BLACK)
+		}
 
 
 		rl.EndMode2D()
 		rl.EndDrawing()
+
+		free_all(context.temp_allocator)
 	}
 
 	rl.CloseWindow()
