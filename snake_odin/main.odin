@@ -66,6 +66,7 @@ main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(WINDOW_SIZE, WINDOW_SIZE, "Sneak Game")
 	rl.SetTargetFPS(500)
+  rl.InitAudioDevice()
 
 	restart()
 
@@ -73,6 +74,9 @@ main :: proc() {
 	head_sprite := rl.LoadTexture("head.png")
 	body_sprite := rl.LoadTexture("body.png")
 	tail_sprite := rl.LoadTexture("tail.png")
+
+  eat_sound := rl.LoadSound("eat.wav")
+  crash_sound := rl.LoadSound("crash.wav")
 
 	for !rl.WindowShouldClose() {
 		if rl.IsKeyPressed(.W) {
@@ -107,6 +111,7 @@ main :: proc() {
 			   head_pos.x >= GRID_WIDTH ||
 			   head_pos.y >= GRID_WIDTH {
 				game_over = true
+        rl.PlaySound(crash_sound)
 			}
 
 			for i in 1 ..< snake_length {
@@ -114,6 +119,7 @@ main :: proc() {
 				// check eating your self
 				if (cur_pos == head_pos) {
 					game_over = true
+          rl.PlaySound(crash_sound)
 				}
 
 				snake[i] = next_part_pos
@@ -125,6 +131,7 @@ main :: proc() {
 				snake_length += 1
 				snake[snake_length - 1] = next_part_pos
 				place_food()
+        rl.PlaySound(eat_sound)
 			}
 
 
@@ -210,6 +217,9 @@ main :: proc() {
 			rl.DrawText("Press Enter to Play Again!", 4, 30, 15, rl.BLACK)
 		}
 
+		score := snake_length - 3
+		score_str := fmt.ctprintf("Score: %v", score)
+		rl.DrawText(score_str, 4, CANVAS_SIZE - 14, 10, rl.GRAY)
 
 		rl.EndMode2D()
 		rl.EndDrawing()
@@ -217,5 +227,14 @@ main :: proc() {
 		free_all(context.temp_allocator)
 	}
 
+	rl.UnloadTexture(head_sprite)
+	rl.UnloadTexture(body_sprite)
+	rl.UnloadTexture(tail_sprite)
+	rl.UnloadTexture(food_sprite)
+
+  rl.UnloadSound(eat_sound)
+  rl.UnloadSound(crash_sound)
+
+  rl.CloseAudioDevice()
 	rl.CloseWindow()
 }
