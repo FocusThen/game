@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:math"
 import rl "vendor:raylib"
 
 Vec2i :: [2]int
@@ -153,14 +154,52 @@ main :: proc() {
 		rl.DrawTextureV(food_sprite, {f32(food_pos.x), f32(food_pos.y)} * CELL_SIZE, rl.WHITE)
 
 		for i in 0 ..< snake_length {
-			body_rect := rl.Rectangle {
-				f32(snake[i].x) * CELL_SIZE,
-				f32(snake[i].y) * CELL_SIZE,
+			// texture
+			part_sprite := body_sprite
+			dir: Vec2i
+
+			if i == 0 {
+				part_sprite = head_sprite
+				dir = snake[i] - snake[i + 1]
+			} else if i == snake_length - 1 {
+				part_sprite = tail_sprite
+				dir = snake[i - 1] - snake[i]
+			} else {
+				dir = snake[i - 1] - snake[i]
+			}
+
+			rot := math.atan2(f32(dir.y), f32(dir.x)) * math.DEG_PER_RAD
+
+			source := rl.Rectangle{0, 0, f32(part_sprite.width), f32(part_sprite.height)}
+
+			dest := rl.Rectangle {
+				f32(snake[i].x) * CELL_SIZE + 0.5 * CELL_SIZE,
+				f32(snake[i].y) * CELL_SIZE + 0.5 * CELL_SIZE,
 				CELL_SIZE,
 				CELL_SIZE,
 			}
 
-			rl.DrawRectangleRec(body_rect, rl.WHITE)
+
+			rl.DrawTexturePro(
+				part_sprite,
+				source,
+				dest,
+				{CELL_SIZE, CELL_SIZE} * 0.5,
+				rot,
+				rl.WHITE,
+			)
+			//
+
+
+			// RECT
+			//body_rect := rl.Rectangle {
+			//	f32(snake[i].x) * CELL_SIZE,
+			//	f32(snake[i].y) * CELL_SIZE,
+			//	CELL_SIZE,
+			//	CELL_SIZE,
+			//}
+			//
+			//rl.DrawRectangleRec(body_rect, rl.WHITE)
 		}
 
 
