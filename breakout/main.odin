@@ -85,12 +85,12 @@ main :: proc() {
 		}
 		// top wall
 		if ball_pos.y - BALL_RADIUS < 0 {
-			ball_pos.x = BALL_RADIUS
-			ball_dir = reflect(ball_dir, {0, -1})
+			ball_pos.y = BALL_RADIUS
+			ball_dir = reflect(ball_dir, {0, 1})
 		}
 		// bottom wall
 		if ball_pos.y > SCREEN_SIZE + BALL_RADIUS * 6 {
-      restart()
+			restart()
 		}
 
 
