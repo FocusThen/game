@@ -79,6 +79,14 @@ calc_block_rect :: proc(x, y: int) -> rl.Rectangle {
 	return {f32(20 + x * BLOCK_WIDTH), f32(40 + y * BLOCK_HEIGHT), BLOCK_WIDTH, BLOCK_HEIGHT}
 }
 
+block_exists :: proc(x,y :int) -> bool {
+  if x< 0 || y < 0 || x >= NUM_BLOCKS_X || y >= NUM_BLOCKS_Y{
+    return false
+  }
+
+  return blocks[x][y]
+}
+
 main :: proc() {
 	rl.SetConfigFlags({.VSYNC_HINT})
 	rl.InitWindow(WINDOW_SIZE, WINDOW_SIZE, "Breakout!")
@@ -206,6 +214,13 @@ main :: proc() {
 					if previous_ball_pos.x > block_rect.x + block_rect.width {
 						collison_normal += {1, 0}
 					}
+
+          if block_exists(x + int(collison_normal.x), y){
+            collison_normal.x = 0
+          }
+          if block_exists(x , y + int(collison_normal.y)){
+            collison_normal.y = 0
+          }
 
 					if collison_normal != 0 {
 						ball_dir = reflect(ball_dir, collison_normal)
