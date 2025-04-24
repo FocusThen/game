@@ -67,10 +67,15 @@ block_color_score := [Block_Color]int {
 started: bool
 game_over: bool
 score: int
+accumulated_time: f32
+previous_ball_pos: rl.Vector2
+previous_paddle_pos_x: f32
 
 restart :: proc() {
 	paddle_pos_x = SCREEN_SIZE / 2 - PADDLE_WIDTH / 2
+  previous_paddle_pos_x = paddle_pos_x
 	ball_pos = {SCREEN_SIZE / 2, BALL_START_Y}
+  previous_ball_pos = ball_pos
 	game_over = false
 	score = 0
 	started = false
@@ -117,7 +122,8 @@ main :: proc() {
 
 
 	for !rl.WindowShouldClose() {
-		dt: f32
+		DT :: 1.0 / 60.0
+
 		screen_width := rl.GetScreenWidth()
 		screen_height := rl.GetScreenHeight()
 
@@ -127,6 +133,8 @@ main :: proc() {
 				SCREEN_SIZE / 2 + f32(math.cos(rl.GetTime()) * SCREEN_SIZE / 2.5),
 				BALL_START_Y,
 			}
+
+      previous_ball_pos = ball_pos
 
 			if rl.IsKeyPressed(.SPACE) {
 				paddle_middle := rl.Vector2{paddle_pos_x + PADDLE_WIDTH / 2, PADDLE_POS_Y}
@@ -139,44 +147,9 @@ main :: proc() {
 				restart()
 			}
 		} else {
-			dt = rl.GetFrameTime()
+			accumulated_time += rl.GetFrameTime()
 		}
 
-		previous_ball_pos := ball_pos
-		ball_pos += ball_dir * BALL_SPEED * dt
-		paddle_move_velocity: f32
-
-		// right wall
-		if ball_pos.x + BALL_RADIUS > SCREEN_SIZE {
-			ball_pos.x = SCREEN_SIZE - BALL_RADIUS
-			ball_dir = reflect(ball_dir, {-1, 0})
-		}
-		// left wall
-		if ball_pos.x - BALL_RADIUS < 0 {
-			ball_pos.x = BALL_RADIUS
-			ball_dir = reflect(ball_dir, {1, 0})
-		}
-		// top wall
-		if ball_pos.y - BALL_RADIUS < 0 {
-			ball_pos.y = BALL_RADIUS
-			ball_dir = reflect(ball_dir, {0, 1})
-		}
-		// bottom wall
-		if !game_over && ball_pos.y > SCREEN_SIZE + BALL_RADIUS * 6 {
-			game_over = true
-			rl.PlaySound(game_over_sound)
-		}
-
-
-		if rl.IsKeyDown(.A) {
-			paddle_move_velocity -= PADDLE_SPEED
-		}
-		if rl.IsKeyDown(.D) {
-			paddle_move_velocity += PADDLE_SPEED
-		}
-
-		paddle_pos_x += paddle_move_velocity * dt
-		paddle_pos_x = clamp(paddle_pos_x, 0, SCREEN_SIZE - PADDLE_WIDTH)
 
 		zoom_x := f32(screen_width) / 320.0
 		zoom_y := f32(screen_height) / 320.0
@@ -187,92 +160,139 @@ main :: proc() {
 		camera.zoom = zoom
 		camera.rotation = 0.0
 
-		paddle_rect := rl.Rectangle{paddle_pos_x, PADDLE_POS_Y, PADDLE_WIDTH, PADDLE_HEIGHT}
+		for accumulated_time >= DT {
+			previous_ball_pos = ball_pos
+			previous_paddle_pos_x = paddle_pos_x
 
-		if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
-			collision_normal: rl.Vector2
-			if previous_ball_pos.y < paddle_rect.y + paddle_rect.height {
-				collision_normal += {0, -1}
-				ball_pos.y = paddle_rect.y - BALL_RADIUS
+			ball_pos += ball_dir * BALL_SPEED * DT
+			paddle_move_velocity: f32
+
+			// right wall
+			if ball_pos.x + BALL_RADIUS > SCREEN_SIZE {
+				ball_pos.x = SCREEN_SIZE - BALL_RADIUS
+				ball_dir = reflect(ball_dir, {-1, 0})
+			}
+			// left wall
+			if ball_pos.x - BALL_RADIUS < 0 {
+				ball_pos.x = BALL_RADIUS
+				ball_dir = reflect(ball_dir, {1, 0})
+			}
+			// top wall
+			if ball_pos.y - BALL_RADIUS < 0 {
+				ball_pos.y = BALL_RADIUS
+				ball_dir = reflect(ball_dir, {0, 1})
+			}
+			// bottom wall
+			if !game_over && ball_pos.y > SCREEN_SIZE + BALL_RADIUS * 6 {
+				game_over = true
+				rl.PlaySound(game_over_sound)
 			}
 
-			if previous_ball_pos.y > paddle_rect.y + paddle_rect.height {
-				collision_normal += {0, 1}
-				ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
+
+			if rl.IsKeyDown(.A) {
+				paddle_move_velocity -= PADDLE_SPEED
+			}
+			if rl.IsKeyDown(.D) {
+				paddle_move_velocity += PADDLE_SPEED
 			}
 
-			if previous_ball_pos.x < paddle_rect.x {
-				collision_normal += {-1, 0}
-			}
-			if previous_ball_pos.x > paddle_rect.x + paddle_rect.width {
-				collision_normal += {1, 0}
+			paddle_pos_x += paddle_move_velocity * DT
+			paddle_pos_x = clamp(paddle_pos_x, 0, SCREEN_SIZE - PADDLE_WIDTH)
+
+
+			paddle_rect := rl.Rectangle{paddle_pos_x, PADDLE_POS_Y, PADDLE_WIDTH, PADDLE_HEIGHT}
+
+			if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, paddle_rect) {
+				collision_normal: rl.Vector2
+				if previous_ball_pos.y < paddle_rect.y + paddle_rect.height {
+					collision_normal += {0, -1}
+					ball_pos.y = paddle_rect.y - BALL_RADIUS
+				}
+
+				if previous_ball_pos.y > paddle_rect.y + paddle_rect.height {
+					collision_normal += {0, 1}
+					ball_pos.y = paddle_rect.y + paddle_rect.height + BALL_RADIUS
+				}
+
+				if previous_ball_pos.x < paddle_rect.x {
+					collision_normal += {-1, 0}
+				}
+				if previous_ball_pos.x > paddle_rect.x + paddle_rect.width {
+					collision_normal += {1, 0}
+				}
+
+				if collision_normal != 0 {
+					ball_dir = reflect(ball_dir, collision_normal)
+				}
+
+				rl.PlaySound(hit_paddle_sound)
 			}
 
-			if collision_normal != 0 {
-				ball_dir = reflect(ball_dir, collision_normal)
+			block_x_loop: for x in 0 ..< NUM_BLOCKS_X {
+				for y in 0 ..< NUM_BLOCKS_Y {
+					if blocks[x][y] == false {
+						continue
+					}
+					block_rect := calc_block_rect(x, y)
+
+					if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
+						collison_normal: rl.Vector2
+
+						if previous_ball_pos.y < block_rect.y {
+							collison_normal += {0, -1}
+						}
+
+						if previous_ball_pos.y > block_rect.y + block_rect.height {
+							collison_normal += {0, 1}
+						}
+
+						if previous_ball_pos.x < block_rect.x {
+							collison_normal += {-1, 0}
+						}
+
+						if previous_ball_pos.x > block_rect.x + block_rect.width {
+							collison_normal += {1, 0}
+						}
+
+						if block_exists(x + int(collison_normal.x), y) {
+							collison_normal.x = 0
+						}
+						if block_exists(x, y + int(collison_normal.y)) {
+							collison_normal.y = 0
+						}
+
+						if collison_normal != 0 {
+							ball_dir = reflect(ball_dir, collison_normal)
+						}
+
+						blocks[x][y] = false
+
+						// score
+						row_color := row_colors[y]
+						score += block_color_score[row_color]
+
+						// sound
+						rl.SetSoundPitch(hit_block_sound, rand.float32_range(0.8, 1.2))
+						rl.PlaySound(hit_block_sound)
+
+						break block_x_loop
+					}
+				}
 			}
 
-			rl.PlaySound(hit_paddle_sound)
+			accumulated_time -= DT
 		}
 
-		block_x_loop: for x in 0 ..< NUM_BLOCKS_X {
-			for y in 0 ..< NUM_BLOCKS_Y {
-				if blocks[x][y] == false {
-					continue
-				}
-				block_rect := calc_block_rect(x, y)
-
-				if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
-					collison_normal: rl.Vector2
-
-					if previous_ball_pos.y < block_rect.y {
-						collison_normal += {0, -1}
-					}
-
-					if previous_ball_pos.y > block_rect.y + block_rect.height {
-						collison_normal += {0, 1}
-					}
-
-					if previous_ball_pos.x < block_rect.x {
-						collison_normal += {-1, 0}
-					}
-
-					if previous_ball_pos.x > block_rect.x + block_rect.width {
-						collison_normal += {1, 0}
-					}
-
-					if block_exists(x + int(collison_normal.x), y) {
-						collison_normal.x = 0
-					}
-					if block_exists(x, y + int(collison_normal.y)) {
-						collison_normal.y = 0
-					}
-
-					if collison_normal != 0 {
-						ball_dir = reflect(ball_dir, collison_normal)
-					}
-
-					blocks[x][y] = false
-
-					// score
-					row_color := row_colors[y]
-					score += block_color_score[row_color]
-
-					// sound
-					rl.SetSoundPitch(hit_block_sound, rand.float32_range(0.8, 1.2))
-					rl.PlaySound(hit_block_sound)
-
-					break block_x_loop
-				}
-			}
-		}
+		blend := accumulated_time / DT
+		ball_render_pos := math.lerp(previous_ball_pos, ball_pos, blend)
+		paddle_render_pos_x := math.lerp(previous_paddle_pos_x, paddle_pos_x, blend)
 
 		rl.BeginDrawing()
 		rl.ClearBackground({150, 190, 220, 255})
 		rl.BeginMode2D(camera)
 
-		rl.DrawTextureV(paddle_texture, {paddle_pos_x, PADDLE_POS_Y}, rl.WHITE)
-		rl.DrawTextureV(ball_texture, ball_pos - {BALL_RADIUS, BALL_RADIUS}, rl.WHITE)
+		rl.DrawTextureV(paddle_texture, {paddle_render_pos_x, PADDLE_POS_Y}, rl.WHITE)
+		rl.DrawTextureV(ball_texture, ball_render_pos - {BALL_RADIUS, BALL_RADIUS}, rl.WHITE)
 
 		for x in 0 ..< NUM_BLOCKS_X {
 			for y in 0 ..< NUM_BLOCKS_Y {
