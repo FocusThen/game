@@ -73,9 +73,9 @@ previous_paddle_pos_x: f32
 
 restart :: proc() {
 	paddle_pos_x = SCREEN_SIZE / 2 - PADDLE_WIDTH / 2
-  previous_paddle_pos_x = paddle_pos_x
+	previous_paddle_pos_x = paddle_pos_x
 	ball_pos = {SCREEN_SIZE / 2, BALL_START_Y}
-  previous_ball_pos = ball_pos
+	previous_ball_pos = ball_pos
 	game_over = false
 	score = 0
 	started = false
@@ -134,7 +134,7 @@ main :: proc() {
 				BALL_START_Y,
 			}
 
-      previous_ball_pos = ball_pos
+			previous_ball_pos = ball_pos
 
 			if rl.IsKeyPressed(.SPACE) {
 				paddle_middle := rl.Vector2{paddle_pos_x + PADDLE_WIDTH / 2, PADDLE_POS_Y}
