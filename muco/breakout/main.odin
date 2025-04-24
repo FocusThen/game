@@ -23,18 +23,79 @@ BALL_START_Y :: 160
 ball_pos: rl.Vector2
 ball_dir: rl.Vector2
 
+// blocks
+NUM_BLOCKS_X :: 10
+NUM_BLOCKS_Y :: 8
+blocks: [NUM_BLOCKS_X][NUM_BLOCKS_Y]bool
+BLOCK_WIDTH :: 28
+BLOCK_HEIGHT :: 10
+
+Block_Color :: enum {
+	Yellow,
+	Green,
+	Purple,
+	Red,
+}
+
+row_colors := [NUM_BLOCKS_Y]Block_Color {
+	.Red,
+	.Red,
+	.Purple,
+	.Purple,
+	.Green,
+	.Green,
+	.Yellow,
+	.Yellow,
+}
+
+block_color_values := [Block_Color]rl.Color {
+	.Yellow = {253, 249, 150, 255},
+	.Green  = {180, 245, 190, 255},
+	.Purple = {170, 120, 250, 255},
+	.Red    = {250, 90, 85, 255},
+}
+
+block_color_score := [Block_Color]int {
+	.Yellow = 2,
+	.Green  = 4,
+	.Purple = 6,
+	.Red    = 8,
+}
+
 // game
 started: bool
+game_over: bool
+score: int
 
 restart :: proc() {
 	paddle_pos_x = SCREEN_SIZE / 2 - PADDLE_WIDTH / 2
 	ball_pos = {SCREEN_SIZE / 2, BALL_START_Y}
+	game_over = false
+	score = 0
 	started = false
+
+	for x in 0 ..< NUM_BLOCKS_X {
+		for y in 0 ..< NUM_BLOCKS_Y {
+			blocks[x][y] = true
+		}
+	}
 }
 
 reflect :: proc(dir, normal: rl.Vector2) -> rl.Vector2 {
 	new_direction := linalg.reflect(dir, linalg.normalize(normal))
 	return linalg.normalize(new_direction)
+}
+
+calc_block_rect :: proc(x, y: int) -> rl.Rectangle {
+	return {f32(20 + x * BLOCK_WIDTH), f32(40 + y * BLOCK_HEIGHT), BLOCK_WIDTH, BLOCK_HEIGHT}
+}
+
+block_exists :: proc(x, y: int) -> bool {
+	if x < 0 || y < 0 || x >= NUM_BLOCKS_X || y >= NUM_BLOCKS_Y {
+		return false
+	}
+
+	return blocks[x][y]
 }
 
 main :: proc() {
@@ -65,6 +126,10 @@ main :: proc() {
 				ball_dir = linalg.normalize0(ball_to_paddle)
 				started = true
 			}
+		} else if game_over {
+			if rl.IsKeyPressed(.SPACE) {
+				restart()
+			}
 		} else {
 			dt = rl.GetFrameTime()
 		}
@@ -89,8 +154,8 @@ main :: proc() {
 			ball_dir = reflect(ball_dir, {0, 1})
 		}
 		// bottom wall
-		if ball_pos.y > SCREEN_SIZE + BALL_RADIUS * 6 {
-			restart()
+		if !game_over && ball_pos.y > SCREEN_SIZE + BALL_RADIUS * 6 {
+			game_over = true
 		}
 
 
@@ -139,6 +204,54 @@ main :: proc() {
 			}
 		}
 
+		block_x_loop: for x in 0 ..< NUM_BLOCKS_X {
+			for y in 0 ..< NUM_BLOCKS_Y {
+				if blocks[x][y] == false {
+					continue
+				}
+				block_rect := calc_block_rect(x, y)
+
+				if rl.CheckCollisionCircleRec(ball_pos, BALL_RADIUS, block_rect) {
+					collison_normal: rl.Vector2
+
+					if previous_ball_pos.y < block_rect.y {
+						collison_normal += {0, -1}
+					}
+
+					if previous_ball_pos.y > block_rect.y + block_rect.height {
+						collison_normal += {0, 1}
+					}
+
+					if previous_ball_pos.x < block_rect.x {
+						collison_normal += {-1, 0}
+					}
+
+					if previous_ball_pos.x > block_rect.x + block_rect.width {
+						collison_normal += {1, 0}
+					}
+
+					if block_exists(x + int(collison_normal.x), y) {
+						collison_normal.x = 0
+					}
+					if block_exists(x, y + int(collison_normal.y)) {
+						collison_normal.y = 0
+					}
+
+					if collison_normal != 0 {
+						ball_dir = reflect(ball_dir, collison_normal)
+					}
+
+					blocks[x][y] = false
+
+					// score
+					row_color := row_colors[y]
+					score += block_color_score[row_color]
+
+					break block_x_loop
+				}
+			}
+		}
+
 		rl.BeginDrawing()
 		rl.ClearBackground({150, 190, 220, 255})
 		rl.BeginMode2D(camera)
@@ -146,8 +259,61 @@ main :: proc() {
 		rl.DrawRectangleRec(paddle_rect, {50, 150, 90, 255})
 		rl.DrawCircleV(ball_pos, BALL_RADIUS, {200, 90, 20, 255})
 
+		for x in 0 ..< NUM_BLOCKS_X {
+			for y in 0 ..< NUM_BLOCKS_Y {
+				if blocks[x][y] == false {
+					continue
+				}
+
+				block_rect := calc_block_rect(x, y)
+
+				top_left := rl.Vector2{block_rect.x, block_rect.y}
+				top_right := rl.Vector2{block_rect.x + block_rect.width, block_rect.y}
+				bottom_left := rl.Vector2{block_rect.x, block_rect.y + block_rect.height}
+				bottom_right := rl.Vector2 {
+					block_rect.x + block_rect.width,
+					block_rect.y + block_rect.height,
+				}
+
+				rl.DrawRectangleRec(block_rect, block_color_values[row_colors[y]])
+				rl.DrawLineEx(top_left, top_right, 1, {255, 255, 150, 100})
+				rl.DrawLineEx(top_left, bottom_left, 1, {255, 255, 150, 100})
+				rl.DrawLineEx(top_right, bottom_right, 1, {0, 0, 50, 100})
+				rl.DrawLineEx(bottom_left, bottom_right, 1, {0, 0, 50, 100})
+			}
+		}
+
+		score_text := fmt.ctprint(score)
+		rl.DrawText(score_text, 5, 5, 10, rl.WHITE)
+
+    if !started{
+			start_text := fmt.ctprint("Start: SPACE")
+			start_text_width := rl.MeasureText(start_text, 15)
+			rl.DrawText(
+				start_text,
+				SCREEN_SIZE / 2 - start_text_width / 2,
+				BALL_START_Y - 30,
+				15,
+				rl.WHITE,
+			)
+    }
+
+		if game_over {
+			game_over_text := fmt.ctprintf("Score: %v, Reset: SPACE", score)
+			game_over_text_width := rl.MeasureText(game_over_text, 15)
+			rl.DrawText(
+				game_over_text,
+				SCREEN_SIZE / 2 - game_over_text_width / 2,
+				BALL_START_Y - 30,
+				15,
+				rl.WHITE,
+			)
+		}
+
 		rl.EndMode2D()
 		rl.EndDrawing()
+
+		free_all(context.temp_allocator)
 	}
 
 	rl.CloseWindow()
